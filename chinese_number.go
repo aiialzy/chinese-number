@@ -7,7 +7,8 @@ import (
 	"unicode"
 )
 
-var numtable = map[rune]int64{
+// Parse map
+var numTable = map[rune]int64{
 	'零': 0,
 	'一': 1,
 	'二': 2,
@@ -41,6 +42,7 @@ var numtable = map[rune]int64{
 	'〇': 0,
 }
 
+// Convert map
 var defaultHanTable = map[int64]rune{
 	0:           '零',
 	1:           '一',
@@ -60,23 +62,27 @@ var defaultHanTable = map[int64]rune{
 }
 
 func init() {
+	// add 0-9 to Parse map
 	for i := 0; i < 10; i++ {
 		key := rune('0' + i)
-		numtable[key] = int64(i)
+		numTable[key] = int64(i)
 	}
 
 	for i := 0; i < 26; i++ {
+		// add a-z to Parse map
 		key := rune('a' + i)
-		numtable[key] = 10 + int64(i)
+		numTable[key] = 10 + int64(i)
 
+		// add A-Z to Parse map
 		key = rune('A' + i)
-		numtable[key] = 10 + int64(i)
+		numTable[key] = 10 + int64(i)
 	}
 
 }
 
+// Get Value from Parse map. This function is Only using in Parse.
 func getNumValue(ch rune) (int64, error) {
-	n, ok := numtable[ch]
+	n, ok := numTable[ch]
 	if !ok {
 		return n, fmt.Errorf("unrecognized chinese-number: %c", ch)
 	}
@@ -84,6 +90,7 @@ func getNumValue(ch rune) (int64, error) {
 	return n, nil
 }
 
+// Parse chinese number into integer(int64).
 func Parse(han string) (num int64, err error) {
 	if len(han) == 0 {
 		return
@@ -98,32 +105,42 @@ func Parse(han string) (num int64, err error) {
 			return
 		}
 
+		// record the biggest chinese number
 		if n1 > max {
 			max = n1
 		}
 
+		// if current chinese number is 万 or 亿
 		if n1 == 1_0000 || n1 == 1_0000_0000 {
+			// handle conner case '万亿' and '亿亿'
 			if last != 1_0000 && last != 1_0000_0000 {
+				// parse a part of chinese number ahead of '万' or '亿'
+				// such as 一千九百八十五万, it should parse part 一千九百八十五
 				tem, err = parse10000(string(hans[begin:i]))
 				if err != nil {
 					return
 				}
+				// such as '一亿零五万'
 				if n1 >= max {
+					// part 一亿
 					num += tem
 					num *= n1
 				} else {
+					// part 零五万
 					num += tem * n1
 				}
 			} else {
+				// conner case 万亿 and 亿亿
 				num *= n1
 			}
 
 			begin = int64(i) + 1
 		}
 		last = n1
-
 	}
 
+	// parse rest part that less than 万
+	// such as 一万五千八百零五, it will parse the rest part 五千八百零五
 	tem, err = parse10000(string(hans[begin:]))
 	if err != nil {
 		return
@@ -149,34 +166,45 @@ func parse10000(han string) (num int64, err error) {
 		return
 	}
 
+	// handle conner case 十 十一 十二 ... 十九
 	if val >= 10 {
 		tem = 1
 	}
 
 	for i := range hans[:len(hans)-1] {
+		// get current chinese number
 		if n1, err = getNumValue(hans[i]); err != nil {
 			return
 		}
 
+		// get next chinese number
 		if n2, err = getNumValue(hans[i+1]); err != nil {
 			return
 		}
 
 		if n1 < 10 {
 			if unicode.IsDigit(hans[i]) {
+				// just a number
 				tem = tem*10 + n1
 			} else {
+				// chinese number
 				tem = n1
 			}
 		} else {
+			// n1 is 十 or n1 is 百 or n1 is 千
 			tem *= n1
 		}
 
+		// 一千一百一十一
 		if n2 < n1 && n1 >= 10 {
+			// plus 一千 first
+			// then plus 一百
+			// then plus 一十
 			num += tem
 			tem = 0
 		}
 	}
+	// finally, plus 一
 	num += tem
 	return
 }
@@ -202,6 +230,8 @@ func Convert(num int64) (han string, err error) {
 	}
 
 	num1 := num
+
+	// count 10000
 	count := 0
 
 	num2 := num1 % 10000
@@ -211,6 +241,7 @@ func Convert(num int64) (han string, err error) {
 	buf.WriteString(addExceptEmpty(tem))
 
 	for num1 > 0 {
+		// case 一万(零)一百, 一万(零)一十
 		if num2 < 1000 && num2 > 0 {
 			zero := hanTable[0]
 			buf.WriteRune(zero)
@@ -221,11 +252,14 @@ func Convert(num int64) (han string, err error) {
 			// 10000
 			buf.WriteRune(wan)
 		} else {
-			// 1_0000_0000
+
 			yi := hanTable[1_0000_0000]
 			tStr := buf.String()
 			tRunes := []rune(tStr)
+
 			if tRunes[len(tRunes)-1] == wan {
+				// if there is a 万(1_0000) ahead of current chinese number
+				// it should turn to 亿 (1_0000_0000)
 				tRunes[len(tRunes)-1] = yi
 				buf.Reset()
 				buf.WriteString(string(tRunes))
@@ -270,7 +304,7 @@ func convert10000(num int64, last bool, hanTable map[int64]rune) (han string, er
 			buf.WriteRune(tem)
 		}
 
-		// 100 1000
+		// such as 10 100 1000 should write 十 百 千 first
 		if total != 0 && !(currentNum == 0 && lastNum == 0) {
 			tem = hanTable[currentNum]
 			buf.WriteRune(tem)
@@ -284,6 +318,8 @@ func convert10000(num int64, last bool, hanTable map[int64]rune) (han string, er
 
 	han = buf.String()
 
+	// conner case 一十 一十一 一十二 ... 一十九
+	// there should be 十 十一 十二 ... 十九
 	if num >= 10 && num < 20 && last {
 		hans := []rune(han)
 		han = string(hans[:len(hans)-1])
