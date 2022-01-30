@@ -103,13 +103,7 @@ func TestRandomNumber(t *testing.T) {
 }
 
 func BenchmarkParse(b *testing.B) {
-	rand.Seed(time.Now().Unix())
-	var num int64 = rand.Int63()
-	han, err := Convert(num)
-	if err != nil {
-		b.Error(err)
-		return
-	}
+	han := "九百二十二亿三千三百七十二万零三百六十八亿五千四百七十七万五千八百零七"
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -119,28 +113,11 @@ func BenchmarkParse(b *testing.B) {
 }
 
 func BenchmarkConvert(b *testing.B) {
-	rand.Seed(time.Now().Unix())
-	var num int64 = rand.Int63()
-	han, err := Convert(num)
-	if err != nil {
-		b.Error(err)
-		return
-	}
-
-	num2, err := Parse(han)
-	if err != nil {
-		b.Error(err)
-		return
-	}
-
-	if num != num2 {
-		b.Errorf("num: %v != %v", num, num2)
-		return
-	}
+	var num int64 = math.MaxInt64
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		Convert(num2)
+		Convert(num)
 	}
 
 }
