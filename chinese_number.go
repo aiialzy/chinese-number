@@ -1,9 +1,9 @@
 package chinese_number
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
-	"strings"
 	"unicode"
 )
 
@@ -41,22 +41,22 @@ var numtable = map[rune]int64{
 	'〇': 0,
 }
 
-var defaultHanTable = map[int64]string{
-	0:           "零",
-	1:           "一",
-	2:           "二",
-	3:           "三",
-	4:           "四",
-	5:           "五",
-	6:           "六",
-	7:           "七",
-	8:           "八",
-	9:           "九",
-	10:          "十",
-	100:         "百",
-	1000:        "千",
-	1_0000:      "万",
-	1_0000_0000: "亿",
+var defaultHanTable = map[int64]rune{
+	0:           '零',
+	1:           '一',
+	2:           '二',
+	3:           '三',
+	4:           '四',
+	5:           '五',
+	6:           '六',
+	7:           '七',
+	8:           '八',
+	9:           '九',
+	10:          '十',
+	100:         '百',
+	1000:        '千',
+	1_0000:      '万',
+	1_0000_0000: '亿',
 }
 
 func init() {
@@ -78,7 +78,7 @@ func init() {
 func getNumValue(ch rune) (int64, error) {
 	n, ok := numtable[ch]
 	if !ok {
-		return n, fmt.Errorf("unrecognized wangwen-number: %c", ch)
+		return n, fmt.Errorf("unrecognized chinese-number: %c", ch)
 	}
 
 	return n, nil
@@ -181,23 +181,23 @@ func parse10000(han string) (num int64, err error) {
 	return
 }
 
-func addExceptEmpty(hans []string, han string) []string {
+func addExceptEmpty(han string) string {
 	if len(han) == 0 {
-		return hans
+		return ""
 	}
-	return append([]string{han}, hans...)
+	return han
 }
 
 func Convert(num int64) (han string, err error) {
 	if num < 0 {
-		return han, errors.New("wangwen-number only support the number greater than or equal to zero")
+		return han, errors.New("chinese-number only support the number greater than or equal to zero")
 	}
 
-	var hans []string
+	var buf bytes.Buffer
 	hanTable := defaultHanTable
 
 	if num == 0 {
-		han = hanTable[0]
+		han = string(hanTable[0])
 		return
 	}
 
@@ -208,25 +208,29 @@ func Convert(num int64) (han string, err error) {
 	num1 /= 10000
 	last := num1 == 0
 	tem, _ := convert10000(num2, last, hanTable)
-	hans = addExceptEmpty(hans, tem)
+	buf.WriteString(addExceptEmpty(tem))
 
 	for num1 > 0 {
 		if num2 < 1000 && num2 > 0 {
 			zero := hanTable[0]
-			hans = append([]string{zero}, hans...)
+			buf.WriteRune(zero)
 		}
 
 		wan := hanTable[10000]
 		if count&1 == 0 {
 			// 10000
-			hans = append([]string{wan}, hans...)
+			buf.WriteRune(wan)
 		} else {
 			// 1_0000_0000
 			yi := hanTable[1_0000_0000]
-			if hans[0] == wan {
-				hans[0] = yi
+			tStr := buf.String()
+			tRunes := []rune(tStr)
+			if tRunes[len(tRunes)-1] == wan {
+				tRunes[len(tRunes)-1] = yi
+				buf.Reset()
+				buf.WriteString(string(tRunes))
 			} else {
-				hans = append([]string{yi}, hans...)
+				buf.WriteRune(yi)
 			}
 		}
 
@@ -234,23 +238,25 @@ func Convert(num int64) (han string, err error) {
 		num1 /= 10000
 		last = num1 == 0
 		tem, _ := convert10000(num2, last, hanTable)
-		hans = addExceptEmpty(hans, tem)
+		buf.WriteString(addExceptEmpty(tem))
 
 		count++
 	}
 
-	han = strings.Join(hans, "")
+	han = buf.String()
+
+	han = reverse(han)
 
 	return
 }
 
-func convert10000(num int64, last bool, hanTable map[int64]string) (han string, err error) {
-	var hans []string
+func convert10000(num int64, last bool, hanTable map[int64]rune) (han string, err error) {
+	var buf bytes.Buffer
 
 	var (
 		num1          = num
 		base    int64 = 1
-		tem     string
+		tem     rune
 		lastNum int64
 		total   int64
 	)
@@ -261,13 +267,13 @@ func convert10000(num int64, last bool, hanTable map[int64]string) (han string, 
 
 		if base >= 10 && currentNum > 0 {
 			tem = hanTable[base]
-			hans = append([]string{tem}, hans...)
+			buf.WriteRune(tem)
 		}
 
 		// 100 1000
 		if total != 0 && !(currentNum == 0 && lastNum == 0) {
 			tem = hanTable[currentNum]
-			hans = append([]string{tem}, hans...)
+			buf.WriteRune(tem)
 		}
 
 		lastNum = currentNum
@@ -276,11 +282,23 @@ func convert10000(num int64, last bool, hanTable map[int64]string) (han string, 
 
 	}
 
+	han = buf.String()
+
 	if num >= 10 && num < 20 && last {
-		hans = hans[1:]
+		hans := []rune(han)
+		han = string(hans[:len(hans)-1])
 	}
 
-	han = strings.Join(hans, "")
-
 	return
+}
+
+func reverse(han string) string {
+	hans := []rune(han)
+	length := len(hans)
+	times := length / 2
+	for i := 0; i < times; i++ {
+		hans[i], hans[length-1-i] = hans[length-1-i], hans[i]
+	}
+
+	return string(hans)
 }
